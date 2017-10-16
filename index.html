@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="">
+<head>
+    <meta charset="UTF-8">
+    <title>Untitled Document</title>
+	<meta name="Author" content=""/>
+</head>
+<body>
+	<form name="myForm">
+		protanope<input type="radio" name="myRadio" value="1" checked="checked" />
+		duetanope<input type="radio" name="myRadio" value="2"/>
+		tritanope<input type="radio" name="myRadio" value="3"/>
+	</form>
+	<input type="file" id="selectfile" accept='image/*'>
+	<div id="output" style="border: none; margin: 30px; background-color: #f8f8f8; min-height: 40px;">
+	</div>
+
+</body>
+</html>
+
+
+<script type="text/javascript">
+	
+	
+	var dichromatsFilter = function(src, dst, width, height) {
+		//アルゴリズム Digital Video Colourmaps for Checking the Legibility of Displays by Dichromats
+		
+		//RGBとLABの変換行列
+		var convertR2L = [17.8824,   43.5161,  4.11935,
+						  3.45565,   27.1554,  3.86714,
+						  0.0299566, 0.184309, 1.46709];
+		
+		var convertL2R = [0.080944,    -0.130504,   0.116721,
+						  -0.0102485,    0.0540194, -0.113615,
+						  -0.000365294, -0.00412163, 0.693513];
+		
+		//1型の変換行列
+		var protanope = [0.0, 2.02344, -2.52581,
+						 0.0, 1.0, 0.0,
+						 0.0, 0.0, 1.0];
+		//2型の変換行列
+		var deuteranope = [1.0,      0.0, 0.0,
+						   0.494207, 0.0, 1.24827,
+						   0.0,      0.0, 1.0];
+		//3型の変換行列
+		var tritanope = [1.0, 0.0, 0.0,
+						 0.0, 1.0, 0.0,
+						 -0.012245,0.072035,0.0];
+		
+		var radioNodeList = document.myForm.myRadio.value;
+		for (var i = 0; i < height; i++) {
+			for (var j = 0; j < width; j++) {
+				var idx = (j + i * width) * 4;
+				//
+				var R = src[idx];
+				var G = src[idx+1];
+				var B = src[idx+2];
+				//sRGB補正の排除
+				R = Math.pow(R/255, 2.2);
+				G = Math.pow(G/255, 2.2);
+				B = Math.pow(B/255, 2.2);
+				/*
+				R = 0.992052*R+0.003974;
+				G = 0.992052*G+0.003974;
+				B = 0.992052*B+0.003974;
+				*/
+				//RGBをLMSへ変換
+				var L = convertR2L[0]*R + convertR2L[1]*G + convertR2L[2]*B;
+				var M = convertR2L[3]*R + convertR2L[4]*G + convertR2L[5]*B;
+				var S = convertR2L[6]*R + convertR2L[7]*G + convertR2L[8]*B;
+				//色覚に応じて補正
+				if(radioNodeList=="1"){
+					//1型
+					L = protanope[1]*M + protanope[2]*S;
+				}else if(radioNodeList=="2"){
+					//2型
+					M = deuteranope[3]*L + deuteranope[5]*S;
+				}else if(radioNodeList=="3"){
+					//3型
+					S = tritanope[6]*L + tritanope[7]*M;
+				}
+				R = convertL2R[0]*L + convertL2R[1]*M + convertL2R[2]*S;
+				G = convertL2R[3]*L + convertL2R[4]*M + convertL2R[5]*S;
+				B = convertL2R[6]*L + convertL2R[7]*M + convertL2R[8]*S;
+				
+				dst[idx] 	 = 255 * Math.pow(R,1/2.2);
+				dst[idx + 1] = 255 * Math.pow(G,1/2.2);
+				dst[idx + 2] = 255 * Math.pow(B,1/2.2);
+				dst[idx + 3] = src[idx + 3];
+			}
+		}
+	};
+
+	window.addEventListener("DOMContentLoaded", function(){
+		
+		//ファイルオープンの際のイベント
+			var ofd = document.getElementById("selectfile");
+			ofd.addEventListener("change", function(evt) {
+				var img = null;
+				var canvas = document.createElement("canvas");
+				canvas.setAttribute("id","changed_image");
+
+				var file = evt.target.files;
+				var reader = new FileReader();
+
+				//dataURL形式でファイルを読み込む
+				reader.readAsDataURL(file[0]);
+
+				//ファイルの読込が終了した時の処理
+				reader.onload = function(){
+					img = new Image();
+					img.onload = function(){
+						//キャンバスに画像をセット
+						var context = canvas.getContext('2d');
+						var width = img.width;
+						var height = img.height;
+						canvas.width = width;
+						canvas.height = height;
+						context.drawImage(img, 0, 0);
+
+						//フィルター処理
+						var srcData = context.getImageData(0, 0, width, height);
+						var dstData = context.createImageData(width, height);
+						var src = srcData.data;
+						var dst = dstData.data;
+						dichromatsFilter(src, dst, width, height);
+						context.putImageData(dstData, 0, 0);
+
+						//画像タグに代入して表示
+						var dataurl = canvas.toDataURL();
+						document.getElementById("output").innerHTML = "<img src='" + dataurl + "'>";
+					}
+					img.src = reader.result;
+				}
+			}, false);
+		
+	});
+</script>
